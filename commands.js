@@ -1,8 +1,13 @@
 const consoleDiv = document.getElementById('console');
-const input = document.getElementById('input');
+const editor = document.getElementById('editor');
+const runBtn = document.getElementById('run');
 
 const variables = {};
 let inBlockComment = false;
+
+function clearConsole() {
+  consoleDiv.innerHTML = '';
+}
 
 function writeOutput(message, type = 'log') {
   const div = document.createElement('div');
@@ -13,18 +18,17 @@ function writeOutput(message, type = 'log') {
 }
 
 function showHelp() {
-  writeOutput('logix language help:');
-  writeOutput('--------------------');
-  writeOutput('set "name" to \'value\'        → create variable');
-  writeOutput('log <value or variable>      → print output');
-  writeOutput('upper <text>                 → uppercase text');
-  writeOutput('reverse <text>               → reverse text');
-  writeOutput('math <expression>            → math with variables');
-  writeOutput('if <cond> then <command>     → conditional');
-  writeOutput('while <cond> do <command>    → loop');
-  writeOutput('-- comment                   → single line comment');
-  writeOutput('/-- ... --/                  → multi line comment');
-  writeOutput('/help                        → show this help');
+  writeOutput('logix help');
+  writeOutput('-----------');
+  writeOutput('set "name" to \'value\'');
+  writeOutput('log "name"');
+  writeOutput('upper <text>');
+  writeOutput('reverse <text>');
+  writeOutput('math <expression>');
+  writeOutput('if <cond> then <command>');
+  writeOutput('while <cond> do <command>');
+  writeOutput('-- single line comment');
+  writeOutput('/-- multi line comment --/');
 }
 
 function resolveVars(text) {
@@ -35,8 +39,7 @@ function resolveVars(text) {
 
 function evalCondition(cond) {
   try {
-    const resolved = resolveVars(cond);
-    return Function(`return (${resolved})`)();
+    return Function(`return (${resolveVars(cond)})`)();
   } catch {
     writeOutput('invalid condition', 'error');
     return false;
@@ -47,61 +50,52 @@ function runCommand(raw) {
   let command = raw.trim();
   if (!command) return;
 
-  // multi-line comments
   if (command.startsWith('/--')) {
     inBlockComment = true;
     return;
   }
+
   if (command.endsWith('--/')) {
     inBlockComment = false;
     return;
   }
-  if (inBlockComment) return;
 
-  // single-line comment
+  if (inBlockComment) return;
   if (command.startsWith('--')) return;
 
-  // help
   if (command === '/help') {
     showHelp();
     return;
   }
 
-  // if statement
   if (command.startsWith('if ')) {
-    const match = command.match(/^if (.+) then (.+)$/);
-    if (match && evalCondition(match[1])) {
-      runCommand(match[2]);
-    }
+    const m = command.match(/^if (.+) then (.+)$/);
+    if (m && evalCondition(m[1])) runCommand(m[2]);
     return;
   }
 
-  // while loop
   if (command.startsWith('while ')) {
-    const match = command.match(/^while (.+) do (.+)$/);
-    if (match) {
+    const m = command.match(/^while (.+) do (.+)$/);
+    if (m) {
       let safety = 1000;
-      while (evalCondition(match[1]) && safety-- > 0) {
-        runCommand(match[2]);
+      while (evalCondition(m[1]) && safety-- > 0) {
+        runCommand(m[2]);
       }
     }
     return;
   }
 
-  // set variable
   const setMatch = command.match(/^set "([^"]+)" to '([^']*)'$/);
   if (setMatch) {
-    const name = setMatch[1];
     let value = setMatch[2];
     value = isNaN(value) ? value : Number(value);
-    variables[name] = value;
-    writeOutput(`set ${name} = ${value}`, 'variable');
+    variables[setMatch[1]] = value;
+    writeOutput(`set ${setMatch[1]} = ${value}`, 'variable');
     return;
   }
 
-  const parts = command.split(' ');
-  const cmd = parts[0];
-  const args = parts.slice(1).join(' ');
+  const [cmd, ...rest] = command.split(' ');
+  const args = rest.join(' ');
 
   switch (cmd) {
     case 'log':
@@ -117,7 +111,7 @@ function runCommand(raw) {
       try {
         writeOutput(eval(resolveVars(args)));
       } catch {
-        writeOutput('invalid math expression', 'error');
+        writeOutput('invalid math', 'error');
       }
       break;
     default:
@@ -125,9 +119,10 @@ function runCommand(raw) {
   }
 }
 
-input.addEventListener('keydown', e => {
-  if (e.key === 'Enter') {
-    runCommand(input.value);
-    input.value = '';
-  }
+runBtn.addEventListener('click', () => {
+  clearConsole();
+  Object.keys(variables).forEach(k => delete variables[k]);
+  inBlockComment = false;
+
+  editor.value.split('\n').forEach(line => runCommand(line));
 });
