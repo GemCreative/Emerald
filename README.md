@@ -1,22 +1,22 @@
-# EMERALD
-**A lightweight, browser-based scripting language for the modern web.**
+# Emerald
+**© Copyright 2026 Emerald**
 
 ---
 
-> Emerald is a browser-based scripting language with its own editor and preview console. It is designed to be readable, familiar, and easy to experiment with, while maintaining the power of a real language.
+> Emerald is a scripting language made by @AModernAnimator and @Sushi-byte-glitch, desgigned to work in **web development**, **data management**, and **applications**
+> It comes in 3 versions : Basic, Dull, and Shine, each fairly different, more complex, and more efficient as they go.
 
-Emerald scripts can be run live in the browser or exported to JavaScript. It bridges the gap between high-level English logic and the performance of a modern engine.
-
-## Core Capabilities
-
-*   **Foundation** – Written in and based entirely off JavaScript.
-*   **Readability** – Focused on English-like syntax to reduce complexity.
-*   **Environment** – Includes a built-in editor and a live preview console.
-*   **Logic** – Dedicated support for variables with clear declaration rules.
-*   **Syntax** – Familiar style for comments, conditionals, and loops.
-*   **Operations** – Robust support for text and math operations.
-*   **Portability** – Export your finished scripts as .em files.
-
+Emerald is mainly inspired by Python and its readability, while it takes things from JavaScript as well.
 ---
+Example script in Basic
+```
+<type=basic>
+-- this is a comment
+// this is a
+multi line comment //
 
-*Designed for developers who value clarity and experimentation.*
+while(true)[
+  delay=5000
+  output.log="Hello world!"
+]
+```
