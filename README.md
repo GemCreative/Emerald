@@ -4,7 +4,8 @@ Emerald
 
 ---
 
-![Static Badge](https://img.shields.io/badge/Basic%20Latest?style=for-the-badge&color=%2350C878&link=https%3A%2F%2Fgithub.com%2FAModernAnimator%2FEmerald%2Freleases%2Ftag%2FBasic)
+[![Basic Latest Release](https://img.shields.io/badge/Basic%20Latest-Download%20Now-green?style=for-the-badge)](https://github.com/AModernAnimator/Emerald/releases/latest)
+
 
 
 
