@@ -1,11 +1,12 @@
 output.log="open"
-
 var"equation"=96-16
 output.log={equation}
 
 if{equation}=80 then [
   output.log="correct"
   output.log="nice job"
-else
+] else if{equation}=16 then [
+  output.error="my bad"
+] else [
   output.error="wuh oh!!"
 ]
