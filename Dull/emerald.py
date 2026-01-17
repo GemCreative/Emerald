@@ -25,7 +25,7 @@ TOKEN_REGEX = re.compile(
 
 KEYWORDS = {
     "var", "const", "func", "class", "new", "if", "else", "while", "repeat",
-    "return", "break", "continue", "await", "true", "false", "null"
+    "return", "break", "continue", "await", "true", "false", "null", "this"
 }
 
 @dataclass
@@ -49,8 +49,7 @@ def tokenize(code: str) -> List[Token]:
 # Parser
 # -------------------------
 @dataclass
-class Node:
-    pass
+class Node: pass
 
 @dataclass
 class Program(Node):
@@ -64,7 +63,7 @@ class VarDecl(Node):
 
 @dataclass
 class Assign(Node):
-    name: str
+    target: Node
     expr: Node
 
 @dataclass
@@ -95,16 +94,13 @@ class Return(Node):
     expr: Optional[Node]
 
 @dataclass
-class Break(Node):
-    pass
-
+class Break(Node): pass
 @dataclass
-class Continue(Node):
-    pass
+class Continue(Node): pass
 
 @dataclass
 class Call(Node):
-    name: str
+    callee: Node
     args: List[Node]
 
 @dataclass
@@ -152,7 +148,7 @@ class Attr(Node):
 class ClassDef(Node):
     name: str
     base: Optional[str]
-    props: List[Tuple[str, Node]]
+    props: List[Node]  # VarDecl + FuncDef inside class
 
 @dataclass
 class New(Node):
@@ -210,7 +206,7 @@ class Parser:
             name = self.eat("NAME").value
             self.eat("SYMBOL", "(")
             params = []
-            while self.peek().type != "SYMBOL" or self.peek().value != ")":
+            while self.peek().value != ")":
                 params.append(self.eat("NAME").value)
                 if self.peek().value == ",":
                     self.eat("SYMBOL", ",")
@@ -226,11 +222,7 @@ class Parser:
                 self.eat("SYMBOL", ":")
                 base = self.eat("NAME").value
             block = self.block()
-            props = []
-            for stmt in block:
-                if isinstance(stmt, VarDecl):
-                    props.append((stmt.name, stmt.expr))
-            return ClassDef(name, base, props)
+            return ClassDef(name, base, block)
 
         if tok.type == "NEW":
             self.eat("NEW")
@@ -272,10 +264,7 @@ class Parser:
 
         if tok.type == "RETURN":
             self.eat("RETURN")
-            if self.peek() and self.peek().type not in ("NEWLINE", "SYMBOL"):
-                expr = self.expr()
-            else:
-                expr = None
+            expr = self.expr() if self.peek() and self.peek().type not in ("SYMBOL",) else None
             return Return(expr)
 
         if tok.type == "BREAK":
@@ -296,7 +285,7 @@ class Parser:
             name = self.eat("NAME").value
             self.eat("OP", "=")
             expr = self.expr()
-            return Assign(name, expr)
+            return Assign(Var(name), expr)
 
         expr = self.expr()
         return ExprStmt(expr)
@@ -384,6 +373,7 @@ class Parser:
 
         if tok.type == "NAME":
             name = self.eat("NAME").value
+            node = Var(name)
 
             # call
             if self.peek() and self.peek().value == "(":
@@ -394,10 +384,9 @@ class Parser:
                     if self.peek().value == ",":
                         self.eat("SYMBOL", ",")
                 self.eat("SYMBOL", ")")
-                return Call(name, args)
+                node = Call(node, args)
 
             # attribute or index
-            node = Var(name)
             while self.peek() and self.peek().value in (".", "["):
                 if self.peek().value == ".":
                     self.eat("SYMBOL", ".")
@@ -448,18 +437,16 @@ class ReturnSignal(Exception):
     def __init__(self, value):
         self.value = value
 
-class BreakSignal(Exception):
-    pass
-
-class ContinueSignal(Exception):
-    pass
+class BreakSignal(Exception): pass
+class ContinueSignal(Exception): pass
 
 class Emerald:
     def __init__(self):
         self.vars: Dict[str, Any] = {}
         self.consts: set = set()
         self.funcs: Dict[str, FuncDef] = {}
-        self.classes: Dict[str, Tuple[Optional[str], Dict[str, Any]]] = {}
+        # class_name -> (base, props, methods)
+        self.classes: Dict[str, Tuple[Optional[str], Dict[str, Any], Dict[str, FuncDef]]] = {}
 
     async def fetch(self, url):
         async with aiohttp.ClientSession() as session:
@@ -474,6 +461,8 @@ class Emerald:
             return node.value
 
         if isinstance(node, Var):
+            if node.name == "this":
+                return local.get("this")
             if node.name in local:
                 return local[node.name]
             return self.vars.get(node.name, None)
@@ -533,7 +522,7 @@ class Emerald:
                 return l or r
 
         if isinstance(node, Call):
-            return await self.call(node.name, [await self.eval_expr(a, local) for a in node.args], local)
+            return await self.call(node.callee, [await self.eval_expr(a, local) for a in node.args], local)
 
         if isinstance(node, Await):
             val = await self.eval_expr(node.expr, local)
@@ -541,29 +530,62 @@ class Emerald:
 
         raise ValueError(f"Unknown expression: {node}")
 
-    async def call(self, name: str, args: List[Any], local: Dict[str, Any]):
+    async def call(self, callee: Node, args: List[Any], local: Dict[str, Any]):
+        # method call
+        if isinstance(callee, Attr):
+            obj = await self.eval_expr(callee.obj, local)
+            method_name = callee.name
+            if "__class__" in obj:
+                class_name = obj["__class__"]
+                method = self.lookup_method(class_name, method_name)
+                if not method:
+                    raise ValueError(f"Method {method_name} not found on class {class_name}")
+
+                new_local = {"this": obj}
+                new_local.update(dict(zip(method.params, args)))
+                try:
+                    await self.exec_block(method.block, new_local)
+                except ReturnSignal as r:
+                    return r.value
+                return None
+
         # built-ins
-        if name == "print":
-            print(*args)
+        if isinstance(callee, Var):
+            name = callee.name
+            if name == "print":
+                print(*args)
+                return None
+            if name == "fetch":
+                return await self.fetch(args[0])
+            if name == "delay":
+                return await self.delay(args[0])
+
+            # user function
+            if name not in self.funcs:
+                raise ValueError(f"Function {name} not defined")
+
+            func = self.funcs[name]
+            if len(args) != len(func.params):
+                raise ValueError(f"{name} expected {len(func.params)} args but got {len(args)}")
+
+            new_local = dict(zip(func.params, args))
+            try:
+                await self.exec_block(func.block, new_local)
+            except ReturnSignal as r:
+                return r.value
             return None
-        if name == "fetch":
-            return await self.fetch(args[0])
-        if name == "delay":
-            return await self.delay(args[0])
 
-        # user function
-        if name not in self.funcs:
-            raise ValueError(f"Function {name} not defined")
+        raise ValueError("Invalid call target")
 
-        func = self.funcs[name]
-        if len(args) != len(func.params):
-            raise ValueError(f"{name} expected {len(func.params)} args but got {len(args)}")
-
-        new_local = dict(zip(func.params, args))
-        try:
-            await self.exec_block(func.block, new_local)
-        except ReturnSignal as r:
-            return r.value
+    def lookup_method(self, class_name: str, method_name: str):
+        # search class chain for method
+        if class_name not in self.classes:
+            return None
+        base, props, methods = self.classes[class_name]
+        if method_name in methods:
+            return methods[method_name]
+        if base:
+            return self.lookup_method(base, method_name)
         return None
 
     async def exec_stmt(self, stmt: Node, local: Dict[str, Any]):
@@ -574,13 +596,28 @@ class Emerald:
             self.vars[stmt.name] = val
 
         elif isinstance(stmt, Assign):
-            if stmt.name in self.consts:
-                raise ValueError(f"Cannot assign to const {stmt.name}")
+            target = stmt.target
             val = await self.eval_expr(stmt.expr, local)
-            if stmt.name in local:
-                local[stmt.name] = val
+
+            if isinstance(target, Var):
+                if target.name in self.consts:
+                    raise ValueError(f"Cannot assign to const {target.name}")
+                if target.name in local:
+                    local[target.name] = val
+                else:
+                    self.vars[target.name] = val
+
+            elif isinstance(target, Attr):
+                obj = await self.eval_expr(target.obj, local)
+                obj[target.name] = val
+
+            elif isinstance(target, Index):
+                obj = await self.eval_expr(target.obj, local)
+                key = await self.eval_expr(target.key, local)
+                obj[key] = val
+
             else:
-                self.vars[stmt.name] = val
+                raise ValueError("Invalid assignment target")
 
         elif isinstance(stmt, ExprStmt):
             await self.eval_expr(stmt.expr, local)
@@ -621,16 +658,23 @@ class Emerald:
             self.funcs[stmt.name] = stmt
 
         elif isinstance(stmt, ClassDef):
-            props = {name: await self.eval_expr(expr, local) for name, expr in stmt.props}
-            self.classes[stmt.name] = (stmt.base, props)
+            props = {}
+            methods = {}
+            for inner in stmt.props:
+                if isinstance(inner, VarDecl):
+                    props[inner.name] = inner.expr
+                elif isinstance(inner, FuncDef):
+                    methods[inner.name] = inner
+            self.classes[stmt.name] = (stmt.base, props, methods)
 
         elif isinstance(stmt, New):
-            base, props = self.classes.get(stmt.class_name, (None, {}))
+            base, props, methods = self.classes.get(stmt.class_name, (None, {}, {}))
             inst = {"__class__": stmt.class_name}
             if base:
-                base_inst = self.new_instance(base)
-                inst.update(base_inst)
-            inst.update(props)
+                inst.update(self.new_instance(base))
+            # evaluate props
+            for k, v in props.items():
+                inst[k] = await self.eval_expr(v, local)
             self.vars[stmt.var_name] = inst
 
         elif isinstance(stmt, Return):
@@ -649,11 +693,10 @@ class Emerald:
     def new_instance(self, class_name: str):
         if class_name not in self.classes:
             raise ValueError(f"Class {class_name} not defined")
-        base, props = self.classes[class_name]
+        base, props, methods = self.classes[class_name]
         inst = {"__class__": class_name}
         if base:
             inst.update(self.new_instance(base))
-        inst.update(props)
         return inst
 
     async def exec_block(self, block: List[Node], local: Dict[str, Any]):
@@ -667,8 +710,19 @@ class Emerald:
         await self.exec_block(prog.statements, {})
 
 # -------------------------
-# Runner
+# REPL
 # -------------------------
+async def repl():
+    interpreter = Emerald()
+    while True:
+        try:
+            code = input("emerald> ")
+            if code.strip() == "exit":
+                break
+            await interpreter.run(code)
+        except Exception as e:
+            print("ERROR:", e)
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         filename = sys.argv[1]
@@ -677,4 +731,4 @@ if __name__ == "__main__":
         interpreter = Emerald()
         asyncio.run(interpreter.run(code))
     else:
-        print("Usage: python emerald.py <filename.emlg>")
+        asyncio.run(repl())
