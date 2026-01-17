@@ -60,6 +60,7 @@ while(true)[
    ```python emerald.py <script.emlg>```
 
 # 🔧 Quick Start
+## Basic
 **✅ Create a script**
 
 Create a file called ```example.emlg```:
