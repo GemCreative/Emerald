@@ -80,7 +80,7 @@ while({x} > 0)[
 Run it
 ```python emerald.py example.emlg```
 
-## Notes
+### Notes
 
 - delay is measured in milliseconds
 
