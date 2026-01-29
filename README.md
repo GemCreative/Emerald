@@ -5,7 +5,7 @@
 
 ---
 
-[![badgey badge](https://img.shields.io/badge/Emerald_Basic-Latest-green)](https://github.com/AModernAnimator/Emerald/releases/tag/Basic) [![badgey badge](https://img.shields.io/badge/Emerald_Dull-Latest-rgb#00664e)](https://github.com/AModernAnimator/Emerald/releases/tag/Dull)
+[![badgey badge](https://img.shields.io/badge/Emerald_Basic-Latest-green)](https://github.com/AModernAnimator/Emerald/releases/tag/Basic)
 
 ---
 
