@@ -9,6 +9,4 @@
 
 ---
 
----
-
 > Emerald is a high-level programming language created by **@AModernAnimator** & **@Sushi-byte-glitch**. It is designed for **backend**, **frontend**, and **data**
