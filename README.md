@@ -9,4 +9,4 @@
 
 ---
 
-> Emerald is a high-level programming language written in Python (soon Golang) created by **@AModernAnimator** & **@Sushi-byte-glitch**. It is designed for **backend**, **frontend**, and **data**
+> Emerald is a high-level programming language written in Python, with Golang for the terminal created by **@AModernAnimator** & **@Sushi-byte-glitch**. It is designed for **backend**, **frontend**, and **data**
