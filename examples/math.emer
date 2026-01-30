@@ -1,0 +1,47 @@
+import random
+import os
+
+print "Math Quiz YEAH!!!"
+print "Type 'exit' to quit anytime!"
+
+score = 0
+while True:
+    # Random numbers 1-20
+    a = random.randint(1, 20)
+    b = random.randint(1, 20)
+    
+    # Random operation
+    op = random.choice(['+', '-', '*'])
+    
+    if op == '+':
+        answer = a + b
+        question = f"What is {a} + {b} = "
+    elif op == '-':
+        if a >= b:
+            answer = a - b
+            question = f"What is {a} - {b} = "
+        else:
+            continue  # Skip if negative
+    else:  # '*'
+        answer = a * b
+        question = f"What is {a} * {b} = "
+    
+    print ""
+    print question
+    
+    user = input("> ")
+    
+    if user.lower() == 'exit':
+        break
+    
+    try:
+        if int(user) == answer:
+            print "✅ CORRECT! Next challenge..."
+            score += 1
+        else:
+            print f"❌ Oops... try again! ({answer} was correct)"
+    except:
+        print "❌ Numbers only please!"
+
+print f"\n FINAL SCORE: {score} CORRECT!"
+print "You = Math Master"
