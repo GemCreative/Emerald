@@ -392,6 +392,7 @@ func (c *Compiler) compileBlock(code *[]Instr, loopStack []loopCtx, types *typeE
 				types.setLocal("LAST_INPUT", typeString)
 			}
 			*code = append(*code, Instr{Op: OP_INPUT, Str: s})
+			*code = append(*code, Instr{Op: OP_POP})
 			continue
 		}
 
@@ -1259,6 +1260,15 @@ func lexExpr(s string) ([]exprToken, error) {
 			i++
 			continue
 		}
+		if r == 'f' && i+1 < len(s) && (s[i+1] == '"' || s[i+1] == '\'') {
+			ftoks, next, err := lexFString(s, i)
+			if err != nil {
+				return nil, err
+			}
+			toks = append(toks, ftoks...)
+			i = next
+			continue
+		}
 		if isLetter(r) || r == '_' {
 			start := i
 			i++
@@ -1337,6 +1347,88 @@ func lexExpr(s string) ([]exprToken, error) {
 	}
 	toks = append(toks, exprToken{kind: exTokEOF})
 	return toks, nil
+}
+
+func lexFString(s string, start int) ([]exprToken, int, error) {
+	if start+1 >= len(s) {
+		return nil, start, errors.New("unterminated f-string")
+	}
+	quote := s[start+1]
+	i := start + 2
+	parts := [][]exprToken{}
+	var lit strings.Builder
+	foundPart := false
+
+	for i < len(s) {
+		ch := s[i]
+		if ch == quote {
+			i++
+			break
+		}
+		if ch == '{' {
+			if lit.Len() > 0 {
+				parts = append(parts, []exprToken{{kind: exTokString, text: lit.String()}})
+				lit.Reset()
+				foundPart = true
+			}
+			end := i + 1
+			depth := 1
+			for end < len(s) {
+				if s[end] == '{' {
+					depth++
+				} else if s[end] == '}' {
+					depth--
+					if depth == 0 {
+						break
+					}
+				}
+				end++
+			}
+			if end >= len(s) || s[end] != '}' {
+				return nil, start, errors.New("unterminated f-string expression")
+			}
+			inner := strings.TrimSpace(s[i+1 : end])
+			if inner == "" {
+				return nil, start, errors.New("empty f-string expression")
+			}
+			exprTokens, err := lexExpr(inner)
+			if err != nil {
+				return nil, start, err
+			}
+			if len(exprTokens) > 0 {
+				exprTokens = exprTokens[:len(exprTokens)-1]
+			}
+			part := []exprToken{{kind: exTokLParen, text: "("}}
+			part = append(part, exprTokens...)
+			part = append(part, exprToken{kind: exTokRParen, text: ")"})
+			parts = append(parts, part)
+			foundPart = true
+			i = end + 1
+			continue
+		}
+		lit.WriteByte(ch)
+		i++
+	}
+
+	if i > len(s) {
+		return nil, start, errors.New("unterminated f-string")
+	}
+	if lit.Len() > 0 {
+		parts = append(parts, []exprToken{{kind: exTokString, text: lit.String()}})
+		foundPart = true
+	}
+	if !foundPart {
+		parts = append(parts, []exprToken{{kind: exTokString, text: ""}})
+	}
+
+	out := []exprToken{}
+	for idx, p := range parts {
+		if idx > 0 {
+			out = append(out, exprToken{kind: exTokOp, text: "+"})
+		}
+		out = append(out, p...)
+	}
+	return out, i, nil
 }
 
 func isLetter(b byte) bool {
@@ -1515,6 +1607,13 @@ func (c *Compiler) inferExprType(node *Expr, types *typeEnv) (ValueType, error) 
 		}
 	case exprCall:
 		switch node.Name {
+		case "input":
+			if _, err := inputPromptFromCall(node); err != nil {
+				return typeUnknown, err
+			}
+			return typeString, nil
+		case "plc":
+			return typeUnknown, errors.New("plc can only be used inside input")
 		case "table", "dict":
 			return typeDict, nil
 		default:
@@ -1616,6 +1715,17 @@ func (c *Compiler) compileExprNode(node *Expr, code *[]Instr) error {
 		}
 		return nil
 	case exprCall:
+		if node.Name == "input" {
+			prompt, err := inputPromptFromCall(node)
+			if err != nil {
+				return err
+			}
+			*code = append(*code, Instr{Op: OP_INPUT, Str: prompt})
+			return nil
+		}
+		if node.Name == "plc" {
+			return errors.New("plc can only be used inside input")
+		}
 		for _, arg := range node.Args {
 			if err := c.compileExprNode(arg, code); err != nil {
 				return err
@@ -1730,7 +1840,9 @@ func (vm *VM) execWithLocals(prog *Program, code []Instr, locals map[string]Valu
 			fmt.Print(ins.Str)
 			text, _ := vm.reader.ReadString('\n')
 			text = strings.TrimRight(text, "\r\n")
-			vm.globals["LAST_INPUT"] = Value{Kind: "string", S: text}
+			v := Value{Kind: "string", S: text}
+			vm.globals["LAST_INPUT"] = v
+			stack = append(stack, v)
 		case OP_WAIT:
 			if len(stack) == 0 {
 				return Value{}, errors.New("stack underflow")
@@ -2098,4 +2210,25 @@ func (v Value) String() string {
 	default:
 		return ""
 	}
+}
+
+func inputPromptFromCall(node *Expr) (string, error) {
+	if node.Kind != exprCall || node.Name != "input" {
+		return "", errors.New("invalid input call")
+	}
+	if len(node.Args) != 1 {
+		return "", errors.New("input expects 1 argument")
+	}
+	arg := node.Args[0]
+	if arg.Kind != exprCall || arg.Name != "plc" {
+		return "", errors.New("input expects plc(\"prompt\")")
+	}
+	if len(arg.Args) != 1 {
+		return "", errors.New("plc expects 1 argument")
+	}
+	p := arg.Args[0]
+	if p.Kind != exprLiteral || p.LitKind != "string" {
+		return "", errors.New("plc expects a string literal")
+	}
+	return p.S, nil
 }
