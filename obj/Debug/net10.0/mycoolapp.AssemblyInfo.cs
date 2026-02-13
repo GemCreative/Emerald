@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("mycoolapp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ce5c75b926f0e54a992663805ce810a431b57476")]
 [assembly: System.Reflection.AssemblyProductAttribute("mycoolapp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("mycoolapp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
