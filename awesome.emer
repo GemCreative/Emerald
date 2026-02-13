@@ -1,0 +1,20 @@
+
+fnc greet(name(str)) (string) {
+  return f"Hello, {name}!"
+}
+
+var user = input("Your name: ")
+print(greet(user))
+
+var nums = [1, 2, 3, 4, 5]
+var squares = []
+
+for(n in nums) {
+  squares = append(squares, math_pow(n, 2))
+}
+
+print(f"squares = {squares}")
+print(f"count = {len(squares)}")
+
+check len(squares) == 5
+print("All good.")

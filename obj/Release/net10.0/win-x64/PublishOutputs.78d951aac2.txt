@@ -1,0 +1,2 @@
+C:\Users\Shavkat\Downloads\mycoolapp\bin\Release\net10.0\win-x64\publish\mycoolapp.pdb
+C:\Users\Shavkat\Downloads\mycoolapp\bin\Release\net10.0\win-x64\publish\mycoolapp.exe
